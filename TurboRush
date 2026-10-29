@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>TurboRush</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏎️%3C/text%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #87ceeb;
+               font-family: system-ui, sans-serif; color: #fff; touch-action: none;
+               user-select: none; -webkit-user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 6px #000a; z-index: 2; }
+  #top { top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between;
+         font-size: 18px; }
+  #spd { top: 44px; left: 16px; font-size: 15px; opacity: .9; }
+  #nitroWrap { bottom: 22px; left: 16px; width: min(46vw, 260px); }
+  #nitroWrap span { font-size: 12px; letter-spacing: 2px; }
+  #nitroTrack { height: 14px; background: #0006; border-radius: 8px; overflow: hidden;
+                border: 2px solid #fff8; margin-top: 4px; }
+  #nitroBar { height: 100%; width: 100%; background: linear-gradient(90deg, #00b0ff, #40c4ff);
+              transition: background .1s; }
+  #nitroBar.on { background: linear-gradient(90deg, #ff6d00, #ffd740); }
+
+  #nitroBtn { position: fixed; right: 18px; bottom: 125px; z-index: 3; width: 78px; height: 78px;
+              border-radius: 50%; border: 4px solid #fff; background: radial-gradient(#29b6f6, #0277bd);
+              color: #fff; font-weight: 800; font-size: 14px; letter-spacing: 1px;
+              box-shadow: 0 4px 16px #0008; touch-action: none; display: none; }
+  #nitroBtn:active, #nitroBtn.on { background: radial-gradient(#ffca28, #ef6c00); transform: scale(.95); }
+  #nitroBtn.locked { background: radial-gradient(#555, #222); border-color: #777; opacity: 0.6; }
+  
+  #msg { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; text-align: center; padding: 20px;
+         background: linear-gradient(135deg, #07111eeF, #061c30d9); pointer-events: auto;
+         text-shadow: 0 2px 6px #000; box-sizing: border-box; overflow-y: auto; }
+  #msg h1 { margin: 0 0 10px; font-size: clamp(26px, 6vw, 44px); letter-spacing: 3px; }
+  #msg p { margin: 4px 0; font-size: 15px; }
+  #msg .hint { margin-top: 14px; color: #90caf9; font-size: 14px; }
+  
+  .menuBtn { margin: 6px 0; border: 0; border-radius: 14px; padding: 12px 26px;
+             background: linear-gradient(135deg,#ffb300,#ff6d00); color: #101820;
+             font-weight: 900; font-size: 16px; letter-spacing: 1px;
+             box-shadow: 0 6px 22px #0008; cursor: pointer; }
+  .menuBtnSecondary { background: linear-gradient(135deg,#29b6f6,#0277bd); color: #fff; }
+  .menuSub { color: #b7d7ed; max-width: 340px; line-height: 1.4; font-size: 14px; }
+  
+  #userProfileCorner { position: fixed; top: 12px; right: 16px; z-index: 5; background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; gap: 8px; }
+  #userProfileCorner input { background: transparent; border: 0; color: #fff; font-weight: bold; font-size: 14px; width: 110px; outline: none; text-align: right; }
+
+  #steeringWheel { position: fixed; bottom: 20px; left: 16px; width: 140px; height: 140px;
+                   border-radius: 50%; border: 6px solid rgba(255,255,255,0.7);
+                   background: radial-gradient(circle, rgba(0,0,0,0.2) 60%, rgba(255,255,255,0.2) 100%);
+                   display: none; z-index: 3; touch-action: none; align-items: center; justify-content: center;
+                   box-shadow: 0 6px 20px #0008; }
+  #steeringWheel::after { content: ''; width: 20px; height: 70px; background: rgba(255,255,255,0.8);
+                          border-radius: 6px; position: absolute; top: 10px; }
+
+  .driveControls { position: fixed; inset: 0; z-index: 3; pointer-events: none; display: none; }
+  .controlBtn { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+                border: 2px solid #ffffffb8; color: white; background: #061b2bd1;
+                box-shadow: 0 4px 12px #0007; font-weight: 900; }
+  .steer { position: absolute; bottom: 24px; width: 66px; height: 66px; border-radius: 18px;
+           font-size: 28px; }
+  #leftBtn { left: 18px; } #rightBtn { left: 94px; }
+  .pedal { position: absolute; bottom: 22px; width: 76px; height: 88px; border-radius: 18px;
+           font-size: 13px; }
+  #brakeBtn { right: 102px; background: #9e2229dc; }
+  #gasBtn { right: 18px; background: #16854bdc; }
+  #pauseBtn { position: absolute; top: 14px; right: 14px; width: 48px; height: 48px;
+              border-radius: 14px; font-size: 20px; z-index: 3; }
+  .controlBtn:active, .controlBtn.pressed { filter: brightness(1.5); transform: scale(.96); }
+
+  .cardList { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; width: 100%; max-width: 340px; padding: 4px; }
+  .cardItem { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  .cardItem button { padding: 6px 12px; border-radius: 8px; border: 0; font-weight: bold; background: #ffb300; color: #111; cursor: pointer; }
+  
+  .inputField { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 10px; color: #fff; width: 80%; max-width: 260px; margin: 4px 0; font-size: 15px; outline: none; text-align: center; }
+
+  @media (max-width: 500px) {
+    .pedal { width: 67px; height: 78px; bottom: 18px; font-size: 11px; }
+    #brakeBtn { right: 91px; } #gasBtn { right: 12px; }
+    #nitroWrap { bottom: 110px; width: 125px; }
+    #nitroBtn { right: 12px; bottom: 112px; width: 68px; height: 68px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="userProfileCorner">
+  <span>👤</span>
+  <input type="text" id="usernameInput" value="Piloto" maxlength="14" onchange="updateUsername(this.value)" />
+</div>
+
+<div class="hud" id="top"><div>Puntos: <b id="score">0</b></div><div>Monedas: <b id="coinsHud">0</b> 🪙</div></div>
+<div class="hud" id="spd">0 km/h</div>
+<div class="hud" id="nitroWrap"><span>NITRO</span><div id="nitroTrack"><div id="nitroBar"></div></div></div>
+<button id="nitroBtn">NITRO</button>
+
+<div id="steeringWheel"></div>
+<div class="driveControls" id="driveControls">
+  <button class="controlBtn steer" id="leftBtn" aria-label="Izquierda">◀</button>
+  <button class="controlBtn steer" id="rightBtn" aria-label="Derecha">▶</button>
+  <button class="controlBtn pedal" id="brakeBtn">FRENO</button>
+  <button class="controlBtn pedal" id="gasBtn">▲<br>ACELERAR</button>
+  <button class="controlBtn" id="pauseBtn" aria-label="Pausar">Ⅱ</button>
+</div>
+<div id="msg"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+
+if (typeof THREE === 'undefined') {
+  $('msg').innerHTML = '<h1>No se pudo cargar el motor 3D</h1><p>Necesitás conexión a internet para cargar three.js.</p>';
+  throw new Error('three.js no disponible');
+}
+
+let saveGame = {
+  username: "Piloto",
+  coins: 0,
+  best: 0,
+  currentCar: 0,
+  unlockedCars: [0],
+  upgrades: { speed: 0, nitro: 0, capacity: 0 },
+  controlType: 'buttons',
+  soundOn: true,
+  friends: []
+};
+try {
+  const saved = localStorage.getItem('turborush_save_v3');
+  if (saved) saveGame = Object.assign(saveGame, JSON.parse(saved));
+} catch(e) {}
+
+$('usernameInput').value = saveGame.username;
+
+function saveState() {
+  try { localStorage.setItem('turborush_save_v3', JSON.stringify(saveGame)); } catch(e) {}
+}
+
+function updateUsername(val) {
+  saveGame.username = val.trim() || "Piloto";
+  saveState();
+}
+
+const CAR_MODELS = [
+  { name: "Deportivo Azul", price: 0, color: 0x1e88e5, speedBonus: 0, accelBonus: 0 },
+  { name: "Rojo Furia", price: 250, color: 0xe53935, speedBonus: 6, accelBonus: 4 },
+  { name: "Neón Violeta", price: 600, color: 0x8e24aa, speedBonus: 12, accelBonus: 8 },
+  { name: "Golden Turbo", price: 1200, color: 0xffb300, speedBonus: 18, accelBonus: 12 },
+  { name: "Phantom Black", price: 2500, color: 0x111111, speedBonus: 25, accelBonus: 18 }
+];
+
+const LANES = [-4.5, -1.5, 1.5, 4.5];
+const DASH_N = 30, DASH_GAP = 8, TREE_N = 22, TREE_GAP = 12;
+
+let mode = 'start';
+let speed = 30, base = 30, dist = 0, bonus = 0, score = 0;
+let nitro = 100, nitroOn = false, wasNitro = false, nitroLocked = false;
+let vx = 0, spawnT = 1, coinT = 3, shake = 0;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 50, 230);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 400);
+scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x335533, 0.95));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(6, 12, 8);
+scene.add(sun);
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 700), new THREE.MeshLambertMaterial({ color: 0x3a8f3a }));
+ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -250); scene.add(ground);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(12, 700), new THREE.MeshLambertMaterial({ color: 0x3b3b42 }));
+road.rotation.x = -Math.PI / 2; road.position.set(0, 0, -250); scene.add(road);
+for (const x of [-6.1, 6.1]) {
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 700), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  edge.position.set(x, 0.03, -250); scene.add(edge);
+}
+
+const dashGeo = new THREE.BoxGeometry(0.15, 0.02, 3.5);
+const dashMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee });
+const dashes = [];
+for (const x of [-3, 0, 3]) {
+  for (let i = 0; i < DASH_N; i++) {
+    const d = new THREE.Mesh(dashGeo, dashMat);
+    d.position.set(x, 0.04, 10 - i * DASH_GAP);
+    scene.add(d); dashes.push(d);
+  }
+}
+
+function makeTree() {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 2, 8), new THREE.MeshLambertMaterial({ color: 0x6d4c41 }));
+  trunk.position.y = 1;
+  const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.7, 4.5, 8), new THREE.MeshLambertMaterial({ color: 0x1b5e20 }));
+  leaves.position.y = 4;
+  g.add(trunk, leaves);
+  g.scale.setScalar(0.8 + Math.random() * 0.8);
+  return g;
+}
+const trees = [];
+for (const side of [-1, 1]) {
+  for (let i = 0; i < TREE_N; i++) {
+    const t = makeTree();
+    t.userData.side = side;
+    t.position.set(side * (9 + Math.random() * 9), 0, 10 - i * TREE_GAP - Math.random() * 6);
+    scene.add(t); trees.push(t);
+  }
+}
+
+const lineGeo = new THREE.BoxGeometry(0.05, 0.05, 7);
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+const lines = [];
+for (let i = 0; i < 36; i++) {
+  const l = new THREE.Mesh(lineGeo, lineMat);
+  l.position.set((Math.random() - 0.5) * 20, 0.5 + Math.random() * 5, -Math.random() * 200);
+  l.visible = false; scene.add(l); lines.push(l);
+}
+
+function makeCar(colorHex, withFlames) {
+  const g = new THREE.Group();
+  const paint = new THREE.MeshLambertMaterial({ color: colorHex });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 4), paint);
+  body.position.y = 0.6;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 2), new THREE.MeshLambertMaterial({ color: 0x1b2430 }));
+  cabin.position.set(0, 1.25, 0.3);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 1.4), paint);
+  roof.position.set(0, 1.58, 0.3);
+  g.add(body, cabin, roof);
+
+  const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.4, 16);
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  for (const sx of [-1.05, 1.05]) for (const sz of [-1.3, 1.3]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI / 2; w.position.set(sx, 0.45, sz); g.add(w);
+  }
+  const tail = new THREE.MeshBasicMaterial({ color: 0xff1744 });
+  const head = new THREE.MeshBasicMaterial({ color: 0xfff59d });
+  for (const sx of [-0.65, 0.65]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.08), tail);
+    t.position.set(sx, 0.7, 2.02); g.add(t);
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.08), head);
+    h.position.set(sx, 0.7, -2.02); g.add(h);
+  }
+  if (withFlames) {
+    g.userData.flames = [];
+    for (const sx of [-0.55, 0.55]) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.28, 2, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff9100, transparent: true, opacity: 0.9 }));
+      f.rotation.x = Math.PI / 2;
+      f.position.set(sx, 0.55, 3.1);
+      f.visible = false; g.add(f); g.userData.flames.push(f);
+    }
+  }
+  return g;
+}
+
+let player = makeCar(CAR_MODELS[saveGame.currentCar].color, true);
+scene.add(player);
+
+function updatePlayerCarMesh() {
+  scene.remove(player);
+  const carData = CAR_MODELS[saveGame.currentCar] || CAR_MODELS[0];
+  player = makeCar(carData.color, true);
+  scene.add(player);
+}
+
+const ENEMY_COLORS = [0xe53935, 0x8e24aa, 0xfb8c00, 0x43a047, 0x00acc1, 0xfdd835];
+let enemies = [];
+let coins = [];
+let parts = [];
+
+const coinGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.15, 20);
+const coinMat = new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x6d4c00 });
+const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+
+let ac = null, eng = null, engGain = null, musicTimer = null;
+function initAudio() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    if (!eng) {
+      eng = ac.createOscillator(); engGain = ac.createGain();
+      eng.type = 'sawtooth'; eng.frequency.value = 80; engGain.gain.value = 0;
+      eng.connect(engGain); engGain.connect(ac.destination); eng.start();
+    }
+    startRetroMusic();
+  } catch (e) {}
+}
+
+function setEngine(on) { try { if (engGain) engGain.gain.value = (on && saveGame.soundOn) ? 0.02 : 0; } catch (e) {} }
+
+function beep(freq, dur, type = 'square', vol = 0.06) {
+  try {
+    if (!ac || !saveGame.soundOn) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + dur);
+  } catch (e) {}
+}
+
+const arpeggioNotes = [220, 261.63, 329.63, 392.0, 440, 523.25, 659.25, 523.25];
+let noteStep = 0;
+function startRetroMusic() {
+  if (musicTimer) return;
+  musicTimer = setInterval(() => {
+    if (mode !== 'play' || !saveGame.soundOn || !ac) return;
+    const note = arpeggioNotes[noteStep % arpeggioNotes.length];
+    noteStep++;
+    try {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.value = note;
+      g.gain.setValueAtTime(0.015, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.18);
+      o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.18);
+    } catch(e) {}
+  }, 200);
+}
+
+function updateHudCoins() {
+  $('coinsHud').textContent = saveGame.coins;
+}
+updateHudCoins();
+
+function showStartMenu() {
+  mode = 'start';
+  hideDriveControls();
+  setEngine(false);
+  showScreen('TURBORUSH', [
+    `<p class="menuSub">Récord: <b>${saveGame.best} pts</b></p>`,
+    `<button class="menuBtn" onclick="startGame()">▶ JUGAR</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showShop()">🛒 TIENDA</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showUpgrades()">⚙️ MEJORAS</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showFriendsMenu()">👥 AMIGOS (${saveGame.friends.length})</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showLanLobby()">🌐 PARTIDA LAN</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showSettings()">🛠️ AJUSTES</button>`
+  ], '');
+}
+
+function showScreen(title, htmlElements, hint) {
+  $('msg').style.display = 'flex';
+  $('msg').innerHTML = `<h1>${title}</h1>` + htmlElements.join('') + (hint ? `<p class="hint">${hint}</p>` : '');
+}
+
+function hideMsg() { $('msg').style.display = 'none'; }
+
+function hideDriveControls() {
+  $('driveControls').style.display = 'none';
+  $('nitroBtn').style.display = 'none';
+  $('steeringWheel').style.display = 'none';
+  $('userProfileCorner').style.display = 'flex';
+}
+
+function syncControlsDisplay() {
+  if (mode !== 'play') return;
+  $('userProfileCorner').style.display = 'none';
+  $('nitroBtn').style.display = 'block';
+  if (saveGame.controlType === 'wheel') {
+    $('steeringWheel').style.display = 'flex';
+    $('driveControls').style.display = 'none';
+  } else {
+    $('steeringWheel').style.display = 'none';
+    $('driveControls').style.display = 'block';
+  }
+}
+
+function showShop() {
+  mode = 'shop';
+  let listHtml = CAR_MODELS.map((car, idx) => {
+    const owned = saveGame.unlockedCars.includes(idx);
+    const selected = saveGame.currentCar === idx;
+    const btnText = selected ? 'EN USO' : (owned ? 'USAR' : `COMPRAR (${car.price} 🪙)`);
+    const action = selected ? '' : (owned ? `selectCar(${idx})` : `buyCar(${idx})`);
+    return `<div class="cardItem">
+      <div><b>${car.name}</b><br><small>Vel: +${car.speedBonus} | Accel: +${car.accelBonus}</small></div>
+      <button ${selected ? 'disabled style="background:#4caf50;color:#fff;"' : ''} onclick="${action}">${btnText}</button>
+    </div>`;
+  }).join('');
+
+  showScreen('TIENDA', [`<div class="cardList">${listHtml}</div>`, `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">VOLVER</button>`], '');
+}
+
+function buyCar(idx) {
+  const car = CAR_MODELS[idx];
+  if (saveGame.coins >= car.price) {
+    saveGame.coins -= car.price;
+    saveGame.unlockedCars.push(idx);
+    saveGame.currentCar = idx;
+    updatePlayerCarMesh();
+    saveState();
+    updateHudCoins();
+    beep(880, 0.2, 'triangle', 0.1);
+    showShop();
+  } else {
+    beep(150, 0.3, 'sawtooth', 0.1);
+    alert('¡No tienes suficientes monedas!');
+  }
+}
+
+function selectCar(idx) {
+  saveGame.currentCar = idx;
+  updatePlayerCarMesh();
+  saveState();
+  beep(600, 0.1, 'sine', 0.08);
+  showShop();
+}
+
+function showUpgrades() {
+  mode = 'upgrades';
+  const u = saveGame.upgrades;
+  const costSpd = (u.speed + 1) * 100;
+  const costNit = (u.nitro + 1) * 100;
+  const costCap = (u.capacity + 1) * 120;
+
+  showScreen('MEJORAS', [
+    `<div class="cardList">
+      <div class="cardItem"><div><b>Velocidad</b> (Nv. ${u.speed}/5)</div><button ${u.speed>=5?'disabled':''} onclick="upgradeItem('speed', ${costSpd})">${u.speed>=5?'MAX':costSpd+' 🪙'}</button></div>
+      <div class="cardItem"><div><b>Nitro</b> (Nv. ${u.nitro}/5)</div><button ${u.nitro>=5?'disabled':''} onclick="upgradeItem('nitro', ${costNit})">${u.nitro>=5?'MAX':costNit+' 🪙'}</button></div>
+      <div class="cardItem"><div><b>Capacidad</b> (Nv. ${u.capacity}/5)</div><button ${u.capacity>=5?'disabled':''} onclick="upgradeItem('capacity', ${costCap})">${u.capacity>=5?'MAX':costCap+' 🪙'}</button></div>
+    </div>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">VOLVER</button>`
+  ], '');
+}
+
+function upgradeItem(type, cost) {
+  if (saveGame.coins >= cost && saveGame.upgrades[type] < 5) {
+    saveGame.coins -= cost;
+    saveGame.upgrades[type]++;
+    saveState();
+    updateHudCoins();
+    beep(750, 0.15, 'triangle', 0.1);
+    showUpgrades();
+  } else {
+    beep(150, 0.3, 'sawtooth', 0.1);
+    alert('Monedas insuficientes o nivel máximo alcanzado.');
+  }
+}
+
+function showFriendsMenu() {
+  mode = 'friends';
+  let listHtml = saveGame.friends.length > 0 ? saveGame.friends.map(f => `<div class="cardItem"><span>👤 ${f}</span><button style="background:#e53935;color:#fff;" onclick="removeFriend('${f}')">Eliminar</button></div>`).join('') : `<div class="cardItem"><span>No tienes amigos agregados aún.</span></div>`;
+
+  showScreen('AMIGOS', [
+    `<input type="text" id="friendNameInput" class="inputField" placeholder="Nombre de usuario..." />`,
+    `<button class="menuBtn" onclick="addFriend()">➕ Agregar Amigo</button>`,
+    `<div class="cardList" style="margin-top:10px;">${listHtml}</div>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">VOLVER</button>`
+  ], '');
+}
+
+function addFriend() {
+  const input = $('friendNameInput');
+  const name = input ? input.value.trim() : '';
+  if (!name) return;
+  if (saveGame.friends.includes(name)) {
+    alert('Este amigo ya está en tu lista.');
+    return;
+  }
+  if (name === saveGame.username) {
+    alert('No te puedes agregar a ti mismo.');
+    return;
+  }
+  saveGame.friends.push(name);
+  saveState();
+  beep(700, 0.15, 'sine', 0.08);
+  showFriendsMenu();
+}
+
+function removeFriend(name) {
+  saveGame.friends = saveGame.friends.filter(f => f !== name);
+  saveState();
+  showFriendsMenu();
+}
+
+function showSettings() {
+  mode = 'settings';
+  showScreen('AJUSTES', [
+    `<div class="cardItem" style="width:260px;margin-bottom:8px;"><span>Modo Control:</span> <b>${saveGame.controlType === 'wheel' ? 'Volante' : 'Botones'}</b></div>`,
+    `<button class="menuBtn" onclick="toggleControlType()">${saveGame.controlType === 'wheel' ? '🛞 Volante -> Botones' : '🎮 Botones -> Volante'}</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="toggleSound()">${saveGame.soundOn ? '🔊 Sonido: ON' : '🔇 Sonido: OFF'}</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">VOLVER</button>`
+  ], '');
+}
+
+function toggleControlType() {
+  saveGame.controlType = saveGame.controlType === 'wheel' ? 'buttons' : 'wheel';
+  saveState();
+  showSettings();
+}
+
+function toggleSound() {
+  saveGame.soundOn = !saveGame.soundOn;
+  saveState();
+  showSettings();
+}
+
+// Salas simuladas para versión web estática local
+let localRooms = [
+  { host: "TurboDriver_Pro", room: "Carrera Pro", private: false, pass: "" }
+];
+
+function showLanLobby() {
+  mode = 'lan';
+  showScreen('PARTIDA LAN', [
+    `<p class="menuSub">Jugando como: <b>${saveGame.username}</b></p>`,
+    `<button class="menuBtn" onclick="showCreateRoomForm()">🛠️ Crear Sala LAN</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="renderRooms()">🔄 Actualizar Salas</button>`,
+    `<div id="lanRoomsList" class="cardList" style="margin-top:10px;"></div>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">VOLVER</button>`
+  ], '');
+  renderRooms();
+}
+
+function renderRooms() {
+  const listEl = $('lanRoomsList');
+  if (!listEl) return;
+  if (localRooms.length > 0) {
+    listEl.innerHTML = localRooms.map(r => {
+      const isFriendRoom = saveGame.friends.includes(r.host);
+      return `<div class="cardItem">
+        <div><b>${r.room}</b><br><small>Host: ${r.host} ${isFriendRoom ? '⭐(Amigo)' : ''} ${r.private ? '🔒 Privada' : '🌐 Pública'}</small></div>
+        <button onclick="joinRoom('${r.room}', ${r.private}, '${r.pass}')">Unirse</button>
+      </div>`;
+    }).join('');
+  } else {
+    listEl.innerHTML = `<div class="cardItem"><span>No hay salas activas. ¡Crea una tú!</span></div>`;
+  }
+}
+
+function showCreateRoomForm() {
+  showScreen('CREAR SALA LAN', [
+    `<input type="text" id="roomNameInput" class="inputField" value="Sala de ${saveGame.username}" placeholder="Nombre de sala" />`,
+    `<div style="margin:8px 0; display:flex; gap:10px; align-items:center;">
+       <label><input type="radio" name="roomType" value="public" checked onchange="togglePasswordInput(false)" /> Pública</label>
+       <label><input type="radio" name="roomType" value="private" onchange="togglePasswordInput(true)" /> Privada</label>
+     </div>`,
+    `<div id="passWrapper" style="display:none;">
+       <input type="password" id="roomPassInput" class="inputField" placeholder="Contraseña opcional" />
+     </div>`,
+    `<button class="menuBtn" onclick="submitCreateRoom()">🚀 Abrir Sala</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showLanLobby()">VOLVER</button>`
+  ], '');
+}
+
+function togglePasswordInput(isPrivate) {
+  const wrap = $('passWrapper');
+  if (wrap) wrap.style.display = isPrivate ? 'block' : 'none';
+}
+
+function submitCreateRoom() {
+  const roomName = $('roomNameInput').value.trim() || `Sala de ${saveGame.username}`;
+  const isPrivate = document.querySelector('input[name="roomType"]:checked').value === 'private';
+  const password = isPrivate && $('roomPassInput') ? $('roomPassInput').value : '';
+
+  localRooms.unshift({ host: saveGame.username, room: roomName, private: isPrivate, pass: password });
+  alert('¡Sala creada con éxito!');
+  showLanLobby();
+}
+
+function joinRoom(roomName, isPrivate, realPass) {
+  if (isPrivate) {
+    const pass = prompt('Esta sala es privada. Ingresa la contraseña:') || '';
+    if (pass !== realPass) {
+      alert('Contraseña incorrecta.');
+      return;
+    }
+  }
+  alert(`¡Conectado a la sala ${roomName}! Preparando carrera...`);
+  startGame();
+}
+
+function resetWorld() {
+  for (const e of enemies) scene.remove(e.m);
+  for (const c of coins) scene.remove(c.m);
+  for (const p of parts) scene.remove(p.m);
+  enemies = []; coins = []; parts = [];
+  
+  const carData = CAR_MODELS[saveGame.currentCar];
+  base = 30 + carData.speedBonus + (saveGame.upgrades.speed * 2);
+  speed = base;
+  dist = 0; bonus = 0; score = 0;
+  nitro = 100; nitroOn = false; wasNitro = false; nitroLocked = false;
+  vx = 0; spawnT = 1; coinT = 3; shake = 0;
+  player.position.set(0, 0, 0); player.rotation.set(0, 0, 0); player.visible = true;
+}
+
+function startGame() {
+  initAudio();
+  resetWorld();
+  mode = 'play'; 
+  hideMsg(); 
+  syncControlsDisplay(); 
+  setEngine(true); 
+  beep(440, 0.12);
+}
+
+function pauseGame() {
+  if (mode === 'play') {
+    mode = 'pause'; 
+    setEngine(false); 
+    hideDriveControls();
+    showScreen('PAUSA', [
+      `<button class="menuBtn" onclick="resumeGame()">▶ CONTINUAR</button>`,
+      `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">MENÚ PRINCIPAL</button>`
+    ], '');
+  }
+}
+
+function resumeGame() {
+  if (mode === 'pause') {
+    mode = 'play'; 
+    hideMsg(); 
+    syncControlsDisplay(); 
+    setEngine(true);
+  }
+}
+
+function crash() {
+  mode = 'over'; 
+  shake = 1; 
+  setEngine(false); 
+  hideDriveControls();
+  player.visible = false;
+  
+  for (let i = 0; i < 45; i++) {
+    const m = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xffb300 : 0xff5722 }));
+    m.position.set(player.position.x, 1, 0); scene.add(m);
+    parts.push({ m, vx: (Math.random() - 0.5) * 14, vy: Math.random() * 10, vz: (Math.random() - 0.5) * 14, life: 1.3 });
+  }
+  beep(110, 0.6, 'sawtooth', 0.12);
+
+  const earnedCoins = Math.floor(bonus / 50) * 10 + Math.floor(score / 30);
+  saveGame.coins += earnedCoins;
+
+  const nuevo = score > saveGame.best;
+  if (nuevo) { 
+    saveGame.best = score; 
+  }
+  saveState();
+  updateHudCoins();
+
+  showScreen('¡CHOCASTE!', [
+    `<p class="menuSub">Puntos: <b>${score}</b> ${nuevo ? '⭐ ¡Nuevo récord!' : ''}</p>`,
+    `<p class="menuSub" style="color:#ffd54f">Monedas ganadas: +${earnedCoins} 🪙</p>`,
+    `<button class="menuBtn" onclick="startGame()">↻ VOLVER A JUGAR</button>`,
+    `<button class="menuBtn menuBtnSecondary" onclick="showStartMenu()">MENÚ PRINCIPAL</button>`
+  ], '');
+}
+
+const keys = {};
+let touchDir = 0, nitroTouch = false, gasTouch = false, brakeTouch = false;
+
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
+  keys[k] = true;
+  if ((k === ' ' || k === 'enter') && (mode === 'start' || mode === 'over')) startGame();
+  if (k === 'p') { mode === 'play' ? pauseGame() : resumeGame(); }
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+renderer.domElement.addEventListener('pointerdown', () => { initAudio(); });
+
+function holdButton(id, onDown, onUp) {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); initAudio();
+    el.classList.add('pressed'); onDown();
+  });
+  const release = e => { e.preventDefault(); el.classList.remove('pressed'); onUp(); };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('pointerleave', e => { if (e.buttons) release(e); });
+}
+
+holdButton('leftBtn', () => touchDir = -1, () => { if (touchDir === -1) touchDir = 0; });
+holdButton('rightBtn', () => touchDir = 1, () => { if (touchDir === 1) touchDir = 0; });
+holdButton('gasBtn', () => gasTouch = true, () => gasTouch = false);
+holdButton('brakeBtn', () => brakeTouch = true, () => brakeTouch = false);
+
+const pauseBtnEl = $('pauseBtn');
+if (pauseBtnEl) pauseBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pauseGame(); });
+
+const nitroBtnEl = $('nitroBtn');
+if (nitroBtnEl) nitroBtnEl.addEventListener('pointerdown', e => { 
+  e.preventDefault(); e.stopPropagation(); initAudio(); 
+  if (!nitroLocked) nitroTouch = true; 
+});
+
+const wheelEl = $('steeringWheel');
+let wheelDragging = false, wheelCenterX = 0;
+if (wheelEl) {
+  wheelEl.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    wheelDragging = true;
+    const rect = wheelEl.getBoundingClientRect();
+    wheelCenterX = rect.left + rect.width / 2;
+  });
+  addEventListener('pointermove', e => {
+    if (!wheelDragging || mode !== 'play') return;
+    const dx = e.clientX - wheelCenterX;
+    const norm = Math.max(-1, Math.min(1, dx / 60));
+    touchDir = norm;
+    wheelEl.style.transform = `rotate(${norm * 45}deg)`;
+  });
+  const stopWheel = () => {
+    if (wheelDragging) {
+      wheelDragging = false;
+      touchDir = 0;
+      if (wheelEl) wheelEl.style.transform = 'rotate(0deg)';
+    }
+  };
+  addEventListener('pointerup', stopWheel);
+  addEventListener('pointercancel', stopWheel);
+}
+
+addEventListener('pointerup', () => { nitroTouch = false; gasTouch = false; brakeTouch = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+
+showStartMenu();
+
+function laneBusy(lane, zmin, zmax) {
+  return enemies.some(e => e.lane === lane && e.m.position.z > zmin && e.m.position.z < zmax);
+}
+
+function update(dt) {
+  if (mode !== 'play') return;
+
+  const want = keys['shift'] || keys['n'] || nitroTouch;
+  if (nitro <= 0) {
+    nitroLocked = true;
+    nitroOn = false;
+  } else if (nitro >= 100) {
+    nitroLocked = false;
+  }
+
+  nitroOn = !!want && !nitroLocked && nitro > 0;
+  
+  const drainRate = 35 - (saveGame.upgrades.nitro * 2);
+  const fillRate = 12 + (saveGame.upgrades.capacity * 2);
+
+  nitro = nitroOn ? Math.max(0, nitro - drainRate * dt) : Math.min(100, nitro + fillRate * dt);
+  if (nitroOn && !wasNitro) beep(200, 0.45, 'sawtooth', 0.09);
+  wasNitro = nitroOn;
+
+  if (nitroLocked) {
+    $('nitroBtn').classList.add('locked');
+  } else {
+    $('nitroBtn').classList.remove('locked');
+  }
+
+  const carData = CAR_MODELS[saveGame.currentCar];
+  base = Math.min(75, 30 + carData.speedBonus + (saveGame.upgrades.speed * 2));
+  const accelerating = gasTouch || keys['arrowup'] || keys['w'];
+  const braking = brakeTouch || keys['arrowdown'] || keys['s'];
+  const target = Math.max(0, base + (accelerating ? 22 + carData.accelBonus : 0) + (nitroOn ? 40 : 0) - (braking ? 45 : 0));
+  speed += (target - speed) * Math.min(1, dt * (braking ? 5 : 2.5));
+
+  const dir = Math.max(-1, Math.min(1, ((keys['arrowleft'] || keys['a']) ? -1 : 0) + ((keys['arrowright'] || keys['d']) ? 1 : 0) + touchDir));
+  vx += (dir * 16 - vx) * Math.min(1, dt * 8);
+  player.position.x = Math.max(-5, Math.min(5, player.position.x + vx * dt));
+  player.rotation.y = -vx * 0.02;
+  player.rotation.z = -vx * 0.008;
+
+  dist += speed * dt * 0.1;
+  const dz = speed * dt;
+
+  for (const d of dashes) { d.position.z += dz; if (d.position.z > 12) d.position.z -= DASH_N * DASH_GAP; }
+  for (const t of trees) {
+    t.position.z += dz;
+    if (t.position.z > 14) { t.position.z -= TREE_N * TREE_GAP; t.position.x = t.userData.side * (9 + Math.random() * 9); }
+  }
+  for (const l of lines) {
+    l.visible = nitroOn;
+    l.position.z += dz * 1.5;
+    if (l.position.z > 12) { l.position.z = -200; l.position.x = (Math.random() - 0.5) * 20; l.position.y = 0.5 + Math.random() * 5; }
+  }
+
+  spawnT -= dt;
+  if (spawnT <= 0) {
+    const lane = Math.floor(Math.random() * 4);
+    const recientes = enemies.filter(e => e.m.position.z < -120).length;
+    if (!laneBusy(lane, -230, -120) && recientes < 2) {
+      const m = makeCar(ENEMY_COLORS[Math.floor(Math.random() * ENEMY_COLORS.length)], false);
+      m.position.set(LANES[lane], 0, -200); scene.add(m);
+      enemies.push({ m, lane, v: 10 + Math.random() * 16 });
+    }
+    spawnT = Math.max(0.3, 1.2 - base * 0.012) * (0.7 + Math.random() * 0.6);
+  }
+
+  coinT -= dt;
+  if (coinT <= 0) {
+    const lane = Math.floor(Math.random() * 4);
+    if (!laneBusy(lane, -230, -140)) {
+      const m = new THREE.Mesh(coinGeo, coinMat);
+      m.rotation.x = Math.PI / 2; m.position.set(0, 1.1, 0);
+      const g = new THREE.Group(); g.add(m); g.position.set(LANES[lane], 0, -200);
+      scene.add(g); coins.push({ m: g, inner: m });
+    }
+    coinT = 1.2 + Math.random() * 2;
+  }
+
+  for (const e of enemies) e.m.position.z += (speed - e.v) * dt;
+  enemies = enemies.filter(e => { const out = e.m.position.z > 20; if (out) scene.remove(e.m); return !out; });
+  for (const e of enemies) {
+    if (Math.abs(e.m.position.x - player.position.x) < 1.75 && Math.abs(e.m.position.z) < 3.5) { crash(); return; }
+  }
+
+  for (const c of coins) { c.m.position.z += dz; c.inner.rotation.z += 3 * dt; }
+  coins = coins.filter(c => {
+    const hit = Math.abs(c.m.position.x - player.position.x) < 1.6 && Math.abs(c.m.position.z) < 2.5;
+    const out = c.m.position.z > 12;
+    if (hit) { bonus += 50; beep(880, 0.12, 'triangle', 0.09); }
+    if (hit || out) scene.remove(c.m);
+    return !(hit || out);
+  });
+
+  score = Math.floor(dist) + bonus;
+
+  try { if (eng) eng.frequency.value = 70 + speed * 2.5 + (nitroOn ? 40 : 0); } catch (e) {}
+}
+
+const clock = new THREE.Clock();
+let fov = 70;
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  update(dt);
+
+  if (player.userData.flames) {
+    for (const f of player.userData.flames) {
+      f.visible = nitroOn && mode === 'play';
+      if (f.visible) { f.scale.y = 0.7 + Math.random() * 0.9; f.material.color.setHex(Math.random() < 0.5 ? 0xff9100 : 0x40c4ff); }
+    }
+  }
+
+  for (const p of parts) {
+    p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt;
+    p.vy -= 25 * dt; p.life -= dt;
+    if (p.m.position.y < 0.2) { p.m.position.y = 0.2; p.vy = 0; }
+    p.m.scale.setScalar(Math.max(0.01, p.life));
+  }
+  parts = parts.filter(p => { if (p.life <= 0) scene.remove(p.m); return p.life > 0; });
+
+  const targetFov = nitroOn ? 92 : 70;
+  fov += (targetFov - fov) * Math.min(1, dt * 5);
+  camera.fov = fov; camera.updateProjectionMatrix();
+  const back = nitroOn ? 11 : 9.5;
+  let jx = 0, jy = 0;
+  if (nitroOn) { jx = (Math.random() - 0.5) * 0.08; jy = (Math.random() - 0.5) * 0.08; }
+  if (shake > 0) { jx += (Math.random() - 0.5) * shake; jy += (Math.random() - 0.5) * shake; shake *= 0.92; }
+  camera.position.set(player.position.x * 0.55 + jx, 4.2 + jy, back);
+  camera.lookAt(player.position.x * 0.4, 1.2, -12);
+
+  $('score').textContent = score;
+  $('spd').textContent = Math.round(speed * 3.6) + ' km/h';
+  $('nitroBar').style.width = nitro + '%';
+  $('nitroBar').classList.toggle('on', nitroOn);
+
+  renderer.render(scene, camera);
+}
+frame();
+</script>
+</body>
+</html>
